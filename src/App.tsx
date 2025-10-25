@@ -100,26 +100,32 @@ const App: React.FC = () => {
     }
   };
 
-  const deleteTask = async (id: string) => {
-    if (busyIds.has(id)) return;
-    try {
-      setBusyIds(prev => new Set(prev).add(id));
-      setError(null);
-      const prev = tasks;
-      // Optimistic remove
-      setTasks((t) => t.filter((x) => x.id !== id));
-      await mockApi.deleteTask(id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not delete task.');
-      setTasks(prev);
-    } finally {
-      setBusyIds(prev => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }
-  };
+const deleteTask = async (id: string) => {
+  if (busyIds.has(id)) return;
+
+  // snapshot BEFORE optimistic update
+  const previous = tasks;
+
+  try {
+    setBusyIds(prev => new Set(prev).add(id));
+    setError(null);
+
+    // Optimistic remove
+    setTasks(t => t.filter(x => x.id !== id));
+    await mockApi.deleteTask(id);
+  } catch (e) {
+    setError(e instanceof Error ? e.message : 'Could not delete task.');
+    // Revert on error
+    setTasks(previous);
+  } finally {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+};
+
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) =>
