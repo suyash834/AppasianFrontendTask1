@@ -5,7 +5,6 @@ export interface Task {
   isCompleted: boolean;
 }
 
-
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5001';
 
 async function handle<T>(res: Response, expectJson = true): Promise<T | void> {
@@ -19,18 +18,20 @@ async function handle<T>(res: Response, expectJson = true): Promise<T | void> {
 
 export const api = {
   getTasks: async (): Promise<Task[]> => {
-    const res = await fetch(`${BASE_URL}/tasks`);
+    const res = await fetch(`${BASE_URL}/tasks`, { credentials: 'omit' });
     return (await handle<Task[]>(res))!;
   },
   createTask: async (description: string): Promise<Task> => {
     const res = await fetch(`${BASE_URL}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // backend model: { description, isCompleted }
       body: JSON.stringify({ description, isCompleted: false }),
     });
     return (await handle<Task>(res))!;
   },
   toggleTask: async (id: string): Promise<void> => {
+    // backend toggles; no body required
     const res = await fetch(`${BASE_URL}/tasks/${id}`, { method: 'PUT' });
     await handle(res, false);
   },

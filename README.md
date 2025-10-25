@@ -1,73 +1,182 @@
-# React + TypeScript + Vite
+# Task Manager Pro - Documentation
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Overview
+A modern, feature-rich task management application built with React and TypeScript. Features a beautiful gradient UI, real-time statistics, optimistic updates, and comprehensive error handling.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### ✨ Core Functionality
+- **Create Tasks** - Add new tasks with a simple input field
+- **Toggle Completion** - Mark tasks as complete/incomplete with visual feedback
+- **Delete Tasks** - Remove tasks with confirmation
+- **Filter Tasks** - View All, Active, or Completed tasks
+- **Real-time Stats** - See total, active, and completed task counts
 
-## React Compiler
+### 🎨 Visual Features
+- Modern gradient design with smooth transitions
+- Statistics dashboard with three metric cards
+- Animated loading states
+- Empty state illustrations
+- Completion celebration messages
+- Hover effects and micro-interactions
+- Responsive layout
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 🔧 Technical Features
+- **Optimistic Updates** - UI updates immediately, reverts on error
+- **Race Condition Protection** - Prevents duplicate operations
+- **Error Handling** - Comprehensive error recovery
+- **TypeScript** - Full type safety
+- **Accessibility** - ARIA labels and keyboard support
+- **Performance** - Memoized calculations
 
-## Expanding the ESLint configuration
+## Installation
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Prerequisites
+- Node.js 16+ 
+- npm, yarn, or pnpm
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Setup
+```bash
+# Clone or download the project
+cd your-project-directory
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+# Install dependencies
+npm install
+# or
+yarn install
+# or
+pnpm install
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Start development server
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## File Structure
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+├── App.tsx          # Main component (copy the improved version)
+├── api.ts           # API integration layer
+├── main.tsx         # Entry point
+└── index.css        # Tailwind styles
+```
+
+## Code Breakdown
+
+### State Management
+```typescript
+const [tasks, setTasks] = useState<Task[]>([]);           // All tasks
+const [newTask, setNewTask] = useState('');               // Input field value
+const [filter, setFilter] = useState<Filter>('All');      // Current filter
+const [loading, setLoading] = useState(true);             // Initial load state
+const [busyIds, setBusyIds] = useState<Set<string>>(new Set()); // Tasks being modified
+const [error, setError] = useState<string | null>(null);  // Error messages
+const [addingTask, setAddingTask] = useState(false);      // Add button state
+```
+
+### Key Functions
+
+#### Add Task
+```typescript
+const addTask = async () => {
+  const text = newTask.trim();
+  if (!text) return;
+  try {
+    setAddingTask(true);
+    setError(null);
+    const created = await mockApi.createTask(text);
+    setTasks((t) => [...t, created]);
+    setNewTask('');
+  } catch (e) {
+    setError(e instanceof Error ? e.message : 'Could not add task.');
+  } finally {
+    setAddingTask(false);
+  }
+};
+```
+
+#### Toggle Task (with Optimistic Update)
+```typescript
+const toggleTask = async (id: string) => {
+  if (busyIds.has(id)) return; // Prevent duplicate operations
+  try {
+    setBusyIds(prev => new Set(prev).add(id));
+    setError(null);
+    
+    // Optimistic update - UI changes immediately
+    setTasks((t) =>
+      t.map((x) => (x.id === id ? { ...x, isCompleted: !x.isCompleted } : x))
+    );
+    
+    await mockApi.toggleTask(id);
+  } catch (e) {
+    setError(e instanceof Error ? e.message : 'Could not toggle task.');
+    
+    // Revert on error
+    setTasks((t) =>
+      t.map((x) => (x.id === id ? { ...x, isCompleted: !x.isCompleted } : x))
+    );
+  } finally {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+};
+```
+
+#### Delete Task (with Error Recovery)
+```typescript
+const deleteTask = async (id: string) => {
+  if (busyIds.has(id)) return;
+  try {
+    setBusyIds(prev => new Set(prev).add(id));
+    setError(null);
+    const prev = tasks; // Store previous state
+    
+    // Optimistic remove
+    setTasks((t) => t.filter((x) => x.id !== id));
+    
+    await mockApi.deleteTask(id);
+  } catch (e) {
+    setError(e instanceof Error ? e.message : 'Could not delete task.');
+    setTasks(prev); // Restore on error - THIS WAS MISSING IN ORIGINAL
+  } finally {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+};
+```
+
+### Performance Optimization
+
+```typescript
+// Memoized filtered tasks - only recalculates when tasks or filter changes
+const filteredTasks = useMemo(() => {
+  return tasks.filter((t) =>
+    filter === 'All' ? true : filter === 'Active' ? !t.isCompleted : t.isCompleted
+  );
+}, [tasks, filter]);
+
+// Memoized statistics
+const stats = useMemo(() => {
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.isCompleted).length;
+  const active = total - completed;
+  return { total, completed, active };
+}, [tasks]);
+```
+
+## License
+MIT
+
+## Support
+For issues or questions, please refer to the codebase comments or reach out to your development team.
+
+---
+
+**Happy Task Managing! 🎉**

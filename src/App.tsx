@@ -1,39 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Circle, Trash2, Plus, Filter, Sparkles } from 'lucide-react';
-
-// Mock API for demonstration
-const mockApi = {
-  tasks: [
-    { id: '1', description: 'Review pull requests', isCompleted: false },
-    { id: '2', description: 'Update documentation', isCompleted: true },
-    { id: '3', description: 'Plan sprint meeting', isCompleted: false },
-  ],
-  getTasks: async () => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return [...mockApi.tasks];
-  },
-  createTask: async (description: string) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const task = { id: Date.now().toString(), description, isCompleted: false };
-    mockApi.tasks.push(task);
-    return task;
-  },
-  toggleTask: async (id: string) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const task = mockApi.tasks.find(t => t.id === id);
-    if (task) task.isCompleted = !task.isCompleted;
-  },
-  deleteTask: async (id: string) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    mockApi.tasks = mockApi.tasks.filter(t => t.id !== id);
-  },
-};
-
-export interface Task {
-  id: string;
-  description: string;
-  isCompleted: boolean;
-}
+import { api, type Task } from './api';
 
 type Filter = 'All' | 'Active' | 'Completed';
 
@@ -49,7 +16,7 @@ const App: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const data = await mockApi.getTasks();
+        const data = await api.getTasks();
         setTasks(data);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to fetch tasks.');
@@ -65,7 +32,7 @@ const App: React.FC = () => {
     try {
       setAddingTask(true);
       setError(null);
-      const created = await mockApi.createTask(text);
+      const created = await api.createTask(text);
       setTasks((t) => [...t, created]);
       setNewTask('');
     } catch (e) {
@@ -77,55 +44,47 @@ const App: React.FC = () => {
 
   const toggleTask = async (id: string) => {
     if (busyIds.has(id)) return;
+    const prev = tasks;
     try {
-      setBusyIds(prev => new Set(prev).add(id));
+      setBusyIds(prevSet => new Set(prevSet).add(id));
       setError(null);
-      // Optimistic update
-      setTasks((t) =>
-        t.map((x) => (x.id === id ? { ...x, isCompleted: !x.isCompleted } : x))
-      );
-      await mockApi.toggleTask(id);
+
+      // optimistic
+      setTasks((t) => t.map((x) => (x.id === id ? { ...x, isCompleted: !x.isCompleted } : x)));
+      await api.toggleTask(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not toggle task.');
-      // Revert on error
-      setTasks((t) =>
-        t.map((x) => (x.id === id ? { ...x, isCompleted: !x.isCompleted } : x))
-      );
+      setTasks(prev); // revert
     } finally {
-      setBusyIds(prev => {
-        const next = new Set(prev);
+      setBusyIds(prevSet => {
+        const next = new Set(prevSet);
         next.delete(id);
         return next;
       });
     }
   };
 
-const deleteTask = async (id: string) => {
-  if (busyIds.has(id)) return;
+  const deleteTask = async (id: string) => {
+    if (busyIds.has(id)) return;
+    const prev = tasks;
+    try {
+      setBusyIds(prevSet => new Set(prevSet).add(id));
+      setError(null);
 
-  // snapshot BEFORE optimistic update
-  const previous = tasks;
-
-  try {
-    setBusyIds(prev => new Set(prev).add(id));
-    setError(null);
-
-    // Optimistic remove
-    setTasks(t => t.filter(x => x.id !== id));
-    await mockApi.deleteTask(id);
-  } catch (e) {
-    setError(e instanceof Error ? e.message : 'Could not delete task.');
-    // Revert on error
-    setTasks(previous);
-  } finally {
-    setBusyIds(prev => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }
-};
-
+      // optimistic
+      setTasks(t => t.filter(x => x.id !== id));
+      await api.deleteTask(id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete task.');
+      setTasks(prev); // revert
+    } finally {
+      setBusyIds(prevSet => {
+        const next = new Set(prevSet);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) =>
@@ -269,9 +228,7 @@ const deleteTask = async (id: string) => {
                       </button>
                       <span
                         className={`flex-1 text-sm transition-all ${
-                          task.isCompleted
-                            ? 'text-gray-400 line-through'
-                            : 'font-medium text-gray-900'
+                          task.isCompleted ? 'text-gray-400 line-through' : 'font-medium text-gray-900'
                         }`}
                       >
                         {task.description}
